@@ -1,0 +1,6 @@
+{
+  "ServerHost":"localhost",
+  "ServerPort":8080,
+  "HashcashZerosCount":4,
+  "IncZerosCountLimit":10
+}
