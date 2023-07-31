@@ -29,7 +29,7 @@ func Run() error {
 
 	defer safeCloseListener(listener)
 
-	var counter *int32
+	var connCounter *int32
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -37,11 +37,19 @@ func Run() error {
 			continue
 		}
 
-		atomic.AddInt32(counter, 1)
-		c := atomic.LoadInt32(counter)
-		zerosCount := cfg.HashcashZerosCount + int(c)/cfg.IncZerosCountLimit
-		go connectionHandler(conn, zerosCount, counter)
+		atomic.AddInt32(connCounter, 1)
+		zerosCount := getZerosCount(cfg.HashcashZerosCount, cfg.IncZerosCountLimit, connCounter)
+		go connectionHandler(conn, zerosCount, connCounter)
 	}
+}
+
+func getZerosCount(defaultZerosCount, incZerosCountLimit int, connCounter *int32) int {
+	if incZerosCountLimit == 0 {
+		return defaultZerosCount
+	}
+
+	c := atomic.LoadInt32(connCounter)
+	return defaultZerosCount + int(c)/incZerosCountLimit
 }
 
 func safeCloseListener(listener net.Listener) {
