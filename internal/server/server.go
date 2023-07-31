@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"sync/atomic"
 
 	"WordOfWisdom/internal/server/quotes"
 	"WordOfWisdom/pkg/config"
@@ -28,7 +29,7 @@ func Run() error {
 
 	defer safeCloseListener(listener)
 
-	counter := 0
+	var counter *int32
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -36,10 +37,10 @@ func Run() error {
 			continue
 		}
 
-		counter++
-		zerosCount := cfg.HashcashZerosCount + counter/cfg.IncZerosCountLimit
-		go connectionHandler(conn, zerosCount)
-		counter--
+		atomic.AddInt32(counter, 1)
+		c := atomic.LoadInt32(counter)
+		zerosCount := cfg.HashcashZerosCount + int(c)/cfg.IncZerosCountLimit
+		go connectionHandler(conn, zerosCount, counter)
 	}
 }
 
@@ -49,8 +50,8 @@ func safeCloseListener(listener net.Listener) {
 	}
 }
 
-func connectionHandler(conn net.Conn, zerosCount int) {
-	defer safeCloseConn(conn)
+func connectionHandler(conn net.Conn, zerosCount int, counter *int32) {
+	defer safeCloseConn(conn, counter)
 	log.Printf("New conn: %s\n", conn.RemoteAddr())
 	challengeMsg := createChallengeMsg(zerosCount)
 	if err := challengeMsg.SendMessage(conn); err != nil {
@@ -61,11 +62,12 @@ func connectionHandler(conn net.Conn, zerosCount int) {
 	handleConnectionResponse(conn, challengeMsg)
 }
 
-func safeCloseConn(conn net.Conn) {
+func safeCloseConn(conn net.Conn, counter *int32) {
 	log.Printf("Closing conn: %s\n", conn.RemoteAddr())
 	if err := conn.Close(); err != nil {
 		log.Printf("Error closing conn: %s\n", err)
 	}
+	atomic.AddInt32(counter, -1)
 }
 
 func createChallengeMsg(zerosCount int) *message.Message {
